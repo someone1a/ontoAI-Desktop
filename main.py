@@ -5,6 +5,17 @@ from PySide6.QtGui import QIcon
 from services.storage import Storage
 from ui.main_window import MainWindow
 
+def get_resource_path(relative_path):
+    """Obtiene la ruta correcta del recurso, tanto en desarrollo como en ejecutable"""
+    if getattr(sys, 'frozen', False):
+        # Si está congelado (ejecutable)
+        base_path = sys._MEIPASS
+    else:
+        # Si está en desarrollo
+        base_path = os.path.dirname(__file__)
+    
+    return os.path.join(base_path, relative_path)
+
 
 def main():
     app = QApplication(sys.argv)
