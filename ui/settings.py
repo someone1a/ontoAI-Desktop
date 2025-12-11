@@ -166,7 +166,7 @@ class SettingsView(QWidget):
         if provider_name == "OpenAI":
             self.model_input.addItems(["gpt-4", "gpt-4-turbo-preview", "gpt-3.5-turbo"])
         elif provider_name == "GroqCloud" or provider_name == "Mixtral":
-            self.model_input.addItems(["mixtral-8x7b-32768", "llama2-70b-4096"])
+            self.model_input.addItems(["llama-3.3-70b-versatile", "llama-3.1-8b-instant"])
         elif provider_name == "Gemini":
             self.model_input.addItems(["gemini-pro", "gemini-pro-vision"])
 
