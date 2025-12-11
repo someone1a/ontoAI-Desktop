@@ -7,6 +7,7 @@ from ui.calendar_view import CalendarView
 from ui.coachee_form import CoacheeForm
 from ui.sessions_view import SessionsView
 from ui.summaries_view import SummariesView
+from ui.payments_view import PaymentsView
 from ui.settings import SettingsView
 
 
@@ -75,6 +76,9 @@ class MainWindow(QMainWindow):
         self.summaries_view = SummariesView(self.storage)
         self.tabs.addTab(self.summaries_view, "Resúmenes")
 
+        self.payments_view = PaymentsView(self.storage)
+        self.tabs.addTab(self.payments_view, "Pagos")
+
         self.calendar_view = CalendarView(self.storage)
         self.calendar_view.session_scheduled.connect(self.on_session_scheduled)
         self.tabs.addTab(self.calendar_view, "Calendario")
@@ -119,6 +123,7 @@ class MainWindow(QMainWindow):
         coachee = item.data(Qt.UserRole)
         self.sessions_view.set_coachee(coachee)
         self.summaries_view.set_coachee(coachee)
+        self.payments_view.set_coachee(coachee)
         self.tabs.setCurrentIndex(0)
 
     def open_add_coachee_form(self):

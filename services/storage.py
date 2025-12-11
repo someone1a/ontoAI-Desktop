@@ -31,9 +31,21 @@ class Storage:
                 coachee_id INTEGER NOT NULL,
                 fecha TEXT NOT NULL,
                 notas TEXT NOT NULL,
+                pagado INTEGER DEFAULT 0,
+                monto REAL DEFAULT 0,
                 FOREIGN KEY (coachee_id) REFERENCES coachees (id)
             )
         ''')
+
+        # Verificar si existen las columnas pagado y monto, si no agregarlas
+        cursor.execute("PRAGMA table_info(sessions)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'pagado' not in columns:
+            cursor.execute('ALTER TABLE sessions ADD COLUMN pagado INTEGER DEFAULT 0')
+        
+        if 'monto' not in columns:
+            cursor.execute('ALTER TABLE sessions ADD COLUMN monto REAL DEFAULT 0')
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS settings (
@@ -192,7 +204,7 @@ class Storage:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT id, coachee_id, fecha, notas FROM sessions
+            SELECT id, coachee_id, fecha, notas, pagado, monto FROM sessions
             WHERE coachee_id = ? AND fecha BETWEEN ? AND ?
             ORDER BY fecha DESC
         ''', (coachee_id, date_from, date_to))
@@ -200,7 +212,13 @@ class Storage:
         rows = cursor.fetchall()
         conn.close()
 
-        return [Session(id=row[0], coachee_id=row[1], fecha=row[2], notas=row[3]) for row in rows]
+        sessions = []
+        for row in rows:
+            session = Session(id=row[0], coachee_id=row[1], fecha=row[2], notas=row[3])
+            session.pagado = bool(row[4]) if len(row) > 4 else False
+            session.monto = row[5] if len(row) > 5 else 0
+            sessions.append(session)
+        return sessions
 
     # Métodos existentes...
     def add_scheduled_session(self, session_data: dict) -> int:
@@ -425,9 +443,10 @@ class Storage:
         cursor = conn.cursor()
 
         cursor.execute('''
-            INSERT INTO sessions (coachee_id, fecha, notas)
-            VALUES (?, ?, ?)
-        ''', (session.coachee_id, session.fecha, session.notas))
+            INSERT INTO sessions (coachee_id, fecha, notas, pagado, monto)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (session.coachee_id, session.fecha, session.notas, 
+              1 if session.pagado else 0, session.monto if hasattr(session, 'monto') else 0))
 
         session_id = cursor.lastrowid
         conn.commit()
@@ -440,7 +459,7 @@ class Storage:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT id, coachee_id, fecha, notas FROM sessions
+            SELECT id, coachee_id, fecha, notas, pagado, monto FROM sessions
             WHERE coachee_id = ?
             ORDER BY fecha DESC
         ''', (coachee_id,))
@@ -448,7 +467,76 @@ class Storage:
         rows = cursor.fetchall()
         conn.close()
 
-        return [Session(id=row[0], coachee_id=row[1], fecha=row[2], notas=row[3]) for row in rows]
+        sessions = []
+        for row in rows:
+            session = Session(id=row[0], coachee_id=row[1], fecha=row[2], notas=row[3])
+            session.pagado = bool(row[4]) if len(row) > 4 else False
+            session.monto = row[5] if len(row) > 5 else 0
+            sessions.append(session)
+        return sessions
+
+    def update_session_payment(self, session_id: int, pagado: bool, monto: float = 0):
+        """Actualiza el estado de pago de una sesión"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE sessions
+            SET pagado = ?, monto = ?
+            WHERE id = ?
+        ''', (1 if pagado else 0, monto, session_id))
+
+        conn.commit()
+        conn.close()
+
+    def get_unpaid_sessions_by_coachee(self, coachee_id: int) -> List[Session]:
+        """Obtiene todas las sesiones no pagadas de un coachee"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, coachee_id, fecha, notas, pagado, monto FROM sessions
+            WHERE coachee_id = ? AND pagado = 0
+            ORDER BY fecha DESC
+        ''', (coachee_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        sessions = []
+        for row in rows:
+            session = Session(id=row[0], coachee_id=row[1], fecha=row[2], notas=row[3])
+            session.pagado = bool(row[4])
+            session.monto = row[5]
+            sessions.append(session)
+        return sessions
+
+    def get_payment_summary_by_coachee(self, coachee_id: int) -> dict:
+        """Obtiene un resumen de pagos por coachee"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as total_sessions,
+                SUM(CASE WHEN pagado = 1 THEN 1 ELSE 0 END) as paid_sessions,
+                SUM(CASE WHEN pagado = 0 THEN 1 ELSE 0 END) as unpaid_sessions,
+                SUM(CASE WHEN pagado = 1 THEN monto ELSE 0 END) as total_paid,
+                SUM(CASE WHEN pagado = 0 THEN monto ELSE 0 END) as total_pending
+            FROM sessions
+            WHERE coachee_id = ?
+        ''', (coachee_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        return {
+            'total_sessions': row[0] or 0,
+            'paid_sessions': row[1] or 0,
+            'unpaid_sessions': row[2] or 0,
+            'total_paid': row[3] or 0,
+            'total_pending': row[4] or 0
+        }
 
     def save_setting(self, key: str, value):
         conn = sqlite3.connect(self.db_path)

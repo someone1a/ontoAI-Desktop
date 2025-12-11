@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QComboBox, QLineEdit, QPushButton, QMessageBox,
                                QGroupBox, QFormLayout, QFileDialog, QRadioButton,
-                               QButtonGroup)
+                               QButtonGroup, QDoubleSpinBox)
 from PySide6.QtCore import Signal
 from services.ai_providers import AIProviderFactory
 
@@ -106,6 +106,38 @@ class SettingsView(QWidget):
         ai_group.setLayout(ai_layout)
         layout.addWidget(ai_group)
 
+        # Grupo de configuración de pagos
+        payments_group = QGroupBox("Configuración de Pagos")
+        payments_layout = QVBoxLayout()
+
+        pricing_form = QFormLayout()
+        pricing_form.setSpacing(10)
+
+        self.session_price_input = QDoubleSpinBox()
+        self.session_price_input.setPrefix("$ ")
+        self.session_price_input.setDecimals(2)
+        self.session_price_input.setMinimum(0)
+        self.session_price_input.setMaximum(999999.99)
+        self.session_price_input.setSingleStep(10.00)
+        pricing_form.addRow("Precio por Sesión:", self.session_price_input)
+
+        payments_layout.addLayout(pricing_form)
+
+        # Botón guardar pagos
+        payments_buttons_layout = QHBoxLayout()
+        payments_buttons_layout.addStretch()
+
+        save_payments_btn = QPushButton("Guardar Precio")
+        save_payments_btn.clicked.connect(self.save_payment_settings)
+        save_payments_btn.setMinimumWidth(130)
+        save_payments_btn.setProperty("class", "primary")
+        payments_buttons_layout.addWidget(save_payments_btn)
+
+        payments_layout.addLayout(payments_buttons_layout)
+
+        payments_group.setLayout(payments_layout)
+        layout.addWidget(payments_group)
+
         layout.addStretch()
 
         self.setLayout(layout)
@@ -124,6 +156,10 @@ class SettingsView(QWidget):
             self.provider_combo.setCurrentIndex(index)
 
         self.load_provider_config(provider)
+
+        # Cargar precio por sesión
+        session_price = self.storage.get_setting('session_price', 0.0)
+        self.session_price_input.setValue(session_price)
 
     def load_provider_config(self, provider_name):
         config = self.storage.get_setting(f'ai_config_{provider_name}', {})
@@ -257,3 +293,12 @@ class SettingsView(QWidget):
                 QMessageBox.critical(self, "Error", "No se pudo crear el proveedor de IA.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al probar la conexión: {str(e)}")
+    def save_payment_settings(self):
+        """Guarda la configuración de precios de sesiones"""
+        try:
+            session_price = self.session_price_input.value()
+
+            self.storage.save_setting('session_price', session_price)
+            QMessageBox.information(self, "Éxito", "Configuración de pagos guardada correctamente.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al guardar la configuración: {str(e)}")
