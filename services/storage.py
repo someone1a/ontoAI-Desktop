@@ -42,7 +42,6 @@ class Storage:
             )
         ''')
 
-        # Nueva tabla para sesiones programadas
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS scheduled_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,9 +58,151 @@ class Storage:
             )
         ''')
 
+        # Nueva tabla para resúmenes generados por IA
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                coachee_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                summary_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                sessions_included TEXT,
+                date_from TEXT,
+                date_to TEXT,
+                created_at TEXT NOT NULL,
+                ai_provider TEXT,
+                FOREIGN KEY (coachee_id) REFERENCES coachees (id)
+            )
+        ''')
+
         conn.commit()
         conn.close()
 
+    # Métodos para resúmenes
+    def add_summary(self, summary_data: dict) -> int:
+        """Agrega un nuevo resumen"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO summaries (
+                coachee_id, title, summary_type, content, 
+                sessions_included, date_from, date_to, 
+                created_at, ai_provider
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            summary_data['coachee_id'],
+            summary_data['title'],
+            summary_data['summary_type'],
+            summary_data['content'],
+            summary_data.get('sessions_included', ''),
+            summary_data.get('date_from', ''),
+            summary_data.get('date_to', ''),
+            summary_data['created_at'],
+            summary_data.get('ai_provider', '')
+        ))
+
+        summary_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return summary_id
+
+    def get_summaries_by_coachee(self, coachee_id: int) -> list:
+        """Obtiene todos los resúmenes de un coachee"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, coachee_id, title, summary_type, content,
+                   sessions_included, date_from, date_to,
+                   created_at, ai_provider
+            FROM summaries
+            WHERE coachee_id = ?
+            ORDER BY created_at DESC
+        ''', (coachee_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        summaries = []
+        for row in rows:
+            summaries.append({
+                'id': row[0],
+                'coachee_id': row[1],
+                'title': row[2],
+                'summary_type': row[3],
+                'content': row[4],
+                'sessions_included': row[5],
+                'date_from': row[6],
+                'date_to': row[7],
+                'created_at': row[8],
+                'ai_provider': row[9]
+            })
+
+        return summaries
+
+    def get_all_summaries(self) -> list:
+        """Obtiene todos los resúmenes"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, coachee_id, title, summary_type, content,
+                   sessions_included, date_from, date_to,
+                   created_at, ai_provider
+            FROM summaries
+            ORDER BY created_at DESC
+        ''')
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        summaries = []
+        for row in rows:
+            summaries.append({
+                'id': row[0],
+                'coachee_id': row[1],
+                'title': row[2],
+                'summary_type': row[3],
+                'content': row[4],
+                'sessions_included': row[5],
+                'date_from': row[6],
+                'date_to': row[7],
+                'created_at': row[8],
+                'ai_provider': row[9]
+            })
+
+        return summaries
+
+    def delete_summary(self, summary_id: int):
+        """Elimina un resumen"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('DELETE FROM summaries WHERE id = ?', (summary_id,))
+
+        conn.commit()
+        conn.close()
+
+    def get_sessions_by_date_range(self, coachee_id: int, date_from: str, date_to: str) -> List[Session]:
+        """Obtiene sesiones de un coachee en un rango de fechas"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, coachee_id, fecha, notas FROM sessions
+            WHERE coachee_id = ? AND fecha BETWEEN ? AND ?
+            ORDER BY fecha DESC
+        ''', (coachee_id, date_from, date_to))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [Session(id=row[0], coachee_id=row[1], fecha=row[2], notas=row[3]) for row in rows]
+
+    # Métodos existentes...
     def add_scheduled_session(self, session_data: dict) -> int:
         """Agrega una sesión programada"""
         conn = sqlite3.connect(self.db_path)

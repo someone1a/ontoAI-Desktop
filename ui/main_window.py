@@ -6,6 +6,7 @@ from PySide6.QtGui import QIcon
 from ui.calendar_view import CalendarView
 from ui.coachee_form import CoacheeForm
 from ui.sessions_view import SessionsView
+from ui.summaries_view import SummariesView
 from ui.settings import SettingsView
 
 
@@ -13,7 +14,7 @@ class MainWindow(QMainWindow):
     def __init__(self, storage):
         super().__init__()
         self.storage = storage
-        self.setWindowTitle("Gestión de Coachees")
+        self.setWindowTitle("Onto AI - Preview")
         self.setMinimumSize(1000, 700)
 
         self.setup_ui()
@@ -71,6 +72,9 @@ class MainWindow(QMainWindow):
         self.sessions_view = SessionsView(self.storage)
         self.tabs.addTab(self.sessions_view, "Sesiones")
 
+        self.summaries_view = SummariesView(self.storage)
+        self.tabs.addTab(self.summaries_view, "Resúmenes")
+
         self.calendar_view = CalendarView(self.storage)
         self.calendar_view.session_scheduled.connect(self.on_session_scheduled)
         self.tabs.addTab(self.calendar_view, "Calendario")
@@ -114,6 +118,7 @@ class MainWindow(QMainWindow):
     def on_coachee_selected(self, item):
         coachee = item.data(Qt.UserRole)
         self.sessions_view.set_coachee(coachee)
+        self.summaries_view.set_coachee(coachee)
         self.tabs.setCurrentIndex(0)
 
     def open_add_coachee_form(self):
@@ -183,6 +188,11 @@ class MainWindow(QMainWindow):
 
                 QPushButton[class="primary"]:pressed {
                     background-color: #084447;
+                }
+
+                QPushButton:disabled {
+                    background-color: #1a1a1a;
+                    color: #666666;
                 }
 
                 QTabWidget::pane {
@@ -274,6 +284,14 @@ class MainWindow(QMainWindow):
                 QDialog {
                     background-color: #1e1e1e;
                 }
+
+                QDateEdit {
+                    background-color: #2d2d2d;
+                    color: #e0e0e0;
+                    border: 1px solid #3d3d3d;
+                    border-radius: 4px;
+                    padding: 8px;
+                }
             """
         else:
             stylesheet = """
@@ -327,6 +345,11 @@ class MainWindow(QMainWindow):
 
                 QPushButton[class="primary"]:pressed {
                     background-color: #0f6f65;
+                }
+
+                QPushButton:disabled {
+                    background-color: #e0e0e0;
+                    color: #999999;
                 }
 
                 QTabWidget::pane {
@@ -417,6 +440,14 @@ class MainWindow(QMainWindow):
 
                 QDialog {
                     background-color: white;
+                }
+
+                QDateEdit {
+                    background-color: white;
+                    color: #333333;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    padding: 8px;
                 }
             """
 
