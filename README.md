@@ -5,13 +5,15 @@ Aplicación de escritorio multiplataforma para gestionar información de coachee
 ## Características
 
 - Gestión completa de coachees (agregar, buscar, listar)
-- Registro de sesiones con notas detalladas
+- Registro de sesiones con notas detalladas y plan accionable asistido por IA
 - Integración con múltiples proveedores de IA:
   - OpenAI (GPT-4, GPT-3.5)
   - GroqCloud
   - GPT4All (modelos locales)
   - Mixtral
   - Google Gemini
+- Recordatorios automáticos de sesiones programadas
+- Dashboard financiero con flujo mensual, tasa de cobranza y alertas de vencimiento
 - Modo claro/oscuro
 - Diseño responsive y minimalista
 - Almacenamiento local con SQLite

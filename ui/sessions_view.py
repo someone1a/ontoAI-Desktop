@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QListWidget, QTextEdit, QPushButton, QMessageBox,
                                QDialog, QComboBox, QListWidgetItem, QGroupBox,
-                               QCheckBox, QDoubleSpinBox, QFormLayout)
+                               QCheckBox, QDoubleSpinBox, QFormLayout, QSplitter)
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 from datetime import datetime
 from services.ai_providers import AIProviderFactory
@@ -108,9 +108,10 @@ class AIConsultDialog(QDialog):
         super().__init__(parent)
         self.storage = storage
         self.notas_text = notas_text
+        self.last_response = ""
         self.setWindowTitle("Consultar IA")
         self.setModal(True)
-        self.setMinimumSize(600, 500)
+        self.setMinimumSize(700, 560)
         self.setup_ui()
 
     def setup_ui(self):
@@ -147,13 +148,32 @@ class AIConsultDialog(QDialog):
 
         layout.addWidget(self.prompt_input)
 
-        response_label = QLabel("Respuesta:")
-        layout.addWidget(response_label)
+        splitter = QSplitter(Qt.Vertical)
 
+        response_group = QGroupBox("Respuesta")
+        response_layout = QVBoxLayout()
         self.response_output = QTextEdit()
         self.response_output.setReadOnly(True)
         self.response_output.setPlaceholderText("La respuesta de la IA aparecerá aquí...")
-        layout.addWidget(self.response_output)
+        response_layout.addWidget(self.response_output)
+        response_group.setLayout(response_layout)
+        splitter.addWidget(response_group)
+
+        insights_group = QGroupBox("Acciones sugeridas")
+        insights_layout = QVBoxLayout()
+        self.insights_output = QTextEdit()
+        self.insights_output.setReadOnly(True)
+        self.insights_output.setPlaceholderText("Genera una respuesta para obtener objetivos, riesgos y acciones sugeridas.")
+        insights_layout.addWidget(self.insights_output)
+
+        self.apply_actions_btn = QPushButton("Copiar acciones a notas")
+        self.apply_actions_btn.clicked.connect(self.apply_actions_to_notes)
+        self.apply_actions_btn.setEnabled(False)
+        insights_layout.addWidget(self.apply_actions_btn)
+        insights_group.setLayout(insights_layout)
+        splitter.addWidget(insights_group)
+
+        layout.addWidget(splitter)
 
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
@@ -200,14 +220,73 @@ class AIConsultDialog(QDialog):
 
             if provider:
                 response = provider.generate_response(prompt)
+                self.last_response = response
                 self.response_output.setPlainText(response)
+                self.generate_actionable_insights(response)
             else:
                 self.response_output.setPlainText("Error: No se pudo crear el proveedor de IA.")
+                self.insights_output.clear()
+                self.apply_actions_btn.setEnabled(False)
         except Exception as e:
             self.response_output.setPlainText(f"Error al consultar IA: {str(e)}")
         finally:
             self.consult_btn.setEnabled(True)
             self.consult_btn.setText("Consultar")
+
+
+    def generate_actionable_insights(self, response_text):
+        """Genera una vista accionable a partir de la respuesta de IA"""
+        lines = [line.strip("-• ").strip() for line in response_text.splitlines() if line.strip()]
+
+        objetivos = []
+        riesgos = []
+        acciones = []
+
+        for line in lines:
+            lower = line.lower()
+            if any(k in lower for k in ["objetivo", "meta", "logro"]):
+                objetivos.append(line)
+            elif any(k in lower for k in ["riesgo", "bloqueo", "obst", "dificultad"]):
+                riesgos.append(line)
+            elif any(k in lower for k in ["acción", "siguiente", "tarea", "plan", "recomend"]):
+                acciones.append(line)
+
+        if not objetivos:
+            objetivos = lines[:2]
+        if not riesgos:
+            riesgos = lines[2:4]
+        if not acciones:
+            acciones = lines[4:8]
+
+        blocks = []
+        if objetivos:
+            blocks.append("OBJETIVOS\n" + "\n".join(f"- {x}" for x in objetivos[:5]))
+        else:
+            blocks.append("OBJETIVOS\n- Sin objetivos detectados")
+
+        if riesgos:
+            blocks.append("RIESGOS / BLOQUEOS\n" + "\n".join(f"- {x}" for x in riesgos[:5]))
+        else:
+            blocks.append("RIESGOS / BLOQUEOS\n- Sin riesgos detectados")
+
+        if acciones:
+            blocks.append("PRÓXIMAS ACCIONES\n" + "\n".join(f"- {x}" for x in acciones[:6]))
+        else:
+            blocks.append("PRÓXIMAS ACCIONES\n- Sin acciones detectadas")
+
+        text = "\n\n".join(blocks)
+        self.insights_output.setPlainText(text)
+        self.apply_actions_btn.setEnabled(bool(text.strip()))
+
+    def apply_actions_to_notes(self):
+        """Inserta las acciones en las notas de sesión"""
+        if not self.insights_output.toPlainText().strip():
+            return
+
+        parent = self.parent()
+        if parent and hasattr(parent, 'notas_input'):
+            parent.notas_input.append("\n\n--- Plan sugerido por IA ---\n" + self.insights_output.toPlainText())
+            QMessageBox.information(self, "Acciones aplicadas", "Se agregaron las acciones sugeridas a las notas de la sesión.")
 
 
 class SessionsView(QWidget):

@@ -51,16 +51,34 @@ class PaymentsView(QWidget):
         
         summary_group.setLayout(summary_layout)
         layout.addWidget(summary_group)
+
+        monthly_group = QGroupBox("Flujo Mensual (últimos 6 meses)")
+        monthly_layout = QVBoxLayout()
+        self.monthly_summary_label = QLabel()
+        self.monthly_summary_label.setStyleSheet("font-size: 12px; padding: 8px;")
+        self.monthly_summary_label.setWordWrap(True)
+        monthly_layout.addWidget(self.monthly_summary_label)
+        monthly_group.setLayout(monthly_layout)
+        layout.addWidget(monthly_group)
+
+        alerts_group = QGroupBox("Alertas de Cobranza")
+        alerts_layout = QVBoxLayout()
+        self.alerts_label = QLabel()
+        self.alerts_label.setWordWrap(True)
+        self.alerts_label.setStyleSheet("font-size: 12px; padding: 8px;")
+        alerts_layout.addWidget(self.alerts_label)
+        alerts_group.setLayout(alerts_layout)
+        layout.addWidget(alerts_group)
         
         # Tabla de pagos por coachee
         coachees_group = QGroupBox("Pagos por Coachee")
         coachees_layout = QVBoxLayout()
         
         self.coachees_table = QTableWidget()
-        self.coachees_table.setColumnCount(6)
+        self.coachees_table.setColumnCount(8)
         self.coachees_table.setHorizontalHeaderLabels([
             "Coachee", "Total Sesiones", "Pagadas", "Pendientes", 
-            "Total Cobrado", "Total Pendiente"
+            "Total Cobrado", "Total Pendiente", "% Cobranza", ">7d"
         ])
         self.coachees_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.coachees_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -122,6 +140,8 @@ class PaymentsView(QWidget):
     def load_payments(self):
         """Carga todos los datos de pagos"""
         self.load_summary()
+        self.load_monthly_summary()
+        self.load_overdue_alerts()
         self.load_coachees_table()
         self.load_pending_sessions()
     
@@ -151,6 +171,38 @@ class PaymentsView(QWidget):
         
         self.summary_label.setText(summary_text)
     
+    def load_monthly_summary(self):
+        """Carga métricas mensuales"""
+        monthly = self.storage.get_monthly_payment_summary(6)
+        if not monthly:
+            self.monthly_summary_label.setText("Sin datos suficientes para construir el flujo mensual.")
+            return
+
+        rows = []
+        for item in reversed(monthly):
+            cobranza = (item['paid_sessions'] / item['total_sessions'] * 100) if item['total_sessions'] else 0
+            rows.append(
+                f"<b>{item['month']}</b>: {item['paid_sessions']}/{item['total_sessions']} pagadas "
+                f"({cobranza:.0f}%) | Cobrado ${item['total_paid']:.2f} | Pendiente ${item['total_pending']:.2f}"
+            )
+
+        self.monthly_summary_label.setText("<br>".join(rows))
+
+    def load_overdue_alerts(self):
+        """Carga alertas de sesiones vencidas"""
+        overdue = self.storage.get_overdue_unpaid_sessions(7)
+        if not overdue:
+            self.alerts_label.setText("✅ No hay sesiones con deuda mayor a 7 días.")
+            self.alerts_label.setStyleSheet("font-size: 12px; padding: 8px; color: #4CAF50;")
+            return
+
+        amount = sum(session.monto if hasattr(session, 'monto') else 0 for session in overdue)
+        self.alerts_label.setStyleSheet("font-size: 12px; padding: 8px; color: #F44336;")
+        self.alerts_label.setText(
+            f"⚠️ Hay {len(overdue)} sesiones pendientes con más de 7 días. "
+            f"Monto total comprometido: ${amount:.2f}"
+        )
+
     def load_coachees_table(self):
         """Carga la tabla de pagos por coachee"""
         self.coachees_table.setRowCount(0)
@@ -201,6 +253,20 @@ class PaymentsView(QWidget):
             pending_amount_item = QTableWidgetItem(f"${summary['total_pending']:.2f}")
             pending_amount_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.coachees_table.setItem(row, 5, pending_amount_item)
+
+            # Tasa de cobranza
+            collection_rate = (summary['paid_sessions'] / summary['total_sessions'] * 100) if summary['total_sessions'] else 0
+            rate_item = QTableWidgetItem(f"{collection_rate:.0f}%")
+            rate_item.setTextAlignment(Qt.AlignCenter)
+            self.coachees_table.setItem(row, 6, rate_item)
+
+            # Sesiones vencidas >7 días
+            overdue_count = len([s for s in self.storage.get_overdue_unpaid_sessions(7) if s.coachee_id == coachee.id])
+            overdue_item = QTableWidgetItem(str(overdue_count))
+            overdue_item.setTextAlignment(Qt.AlignCenter)
+            if overdue_count > 0:
+                overdue_item.setForeground(QColor("#F44336"))
+            self.coachees_table.setItem(row, 7, overdue_item)
             
             row += 1
     

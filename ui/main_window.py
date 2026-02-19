@@ -133,7 +133,16 @@ class MainWindow(QMainWindow):
 
     def on_session_scheduled(self):
         """Maneja cuando una nueva sesión es programada"""
-        pass
+        try:
+            self.payments_view.load_payments()
+            QMessageBox.information(
+                self,
+                "Sesión programada",
+                "La sesión fue registrada en el calendario. Recibirás recordatorios según la configuración elegida."
+            )
+        except Exception:
+            # Si falla un refresh, no bloqueamos la experiencia principal.
+            self.payments_view.load_payments()
 
     def on_theme_changed(self, theme):
         self.apply_theme()

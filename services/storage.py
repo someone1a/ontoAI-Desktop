@@ -538,6 +538,65 @@ class Storage:
             'total_pending': row[4] or 0
         }
 
+    def get_monthly_payment_summary(self, months: int = 6) -> list:
+        """Obtiene resumen financiero mensual de los últimos N meses"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT
+                strftime('%Y-%m', fecha) as month,
+                COUNT(*) as total_sessions,
+                SUM(CASE WHEN pagado = 1 THEN 1 ELSE 0 END) as paid_sessions,
+                SUM(CASE WHEN pagado = 0 THEN 1 ELSE 0 END) as unpaid_sessions,
+                SUM(CASE WHEN pagado = 1 THEN monto ELSE 0 END) as total_paid,
+                SUM(CASE WHEN pagado = 0 THEN monto ELSE 0 END) as total_pending
+            FROM sessions
+            GROUP BY month
+            ORDER BY month DESC
+            LIMIT ?
+        ''', (months,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        summary = []
+        for row in rows:
+            summary.append({
+                'month': row[0],
+                'total_sessions': row[1] or 0,
+                'paid_sessions': row[2] or 0,
+                'unpaid_sessions': row[3] or 0,
+                'total_paid': row[4] or 0,
+                'total_pending': row[5] or 0
+            })
+
+        return summary
+
+    def get_overdue_unpaid_sessions(self, days_overdue: int = 7) -> list:
+        """Obtiene sesiones no pagadas con más de X días de antigüedad"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, coachee_id, fecha, notas, pagado, monto
+            FROM sessions
+            WHERE pagado = 0
+              AND datetime(fecha) <= datetime('now', ?)
+            ORDER BY fecha ASC
+        ''', (f'-{days_overdue} days',))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        sessions = []
+        for row in rows:
+            session = Session(id=row[0], coachee_id=row[1], fecha=row[2], notas=row[3])
+            session.pagado = bool(row[4])
+            session.monto = row[5]
+            sessions.append(session)
+        return sessions
+
     def save_setting(self, key: str, value):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
